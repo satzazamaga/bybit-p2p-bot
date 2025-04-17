@@ -149,7 +149,7 @@ async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def init_job_queue(app):
     app.job_queue.run_repeating(check_bybit, interval=CHECK_INTERVAL, first=5)
 
-if name == "__main__":
+if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).post_init(init_job_queue).build()
 
     app.add_handler(CommandHandler("start", start))
