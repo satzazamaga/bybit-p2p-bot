@@ -103,11 +103,12 @@ async def check_bybit(context: ContextTypes.DEFAULT_TYPE):
                         "authMaker": False
                     }
 
-bank_filter = user_data[uid].get("bank", None)
+                    bank_filter = user_data[uid].get("bank", None)
                     if bank_filter and bank_filter != "All":
                         payload["payment"] = [bank_filter]
                     try:
                         async with session.post(url, json=payload) as resp:
+
                             data = await resp.json()
                             items = data.get("result", {}).get("items", [])
                             if len(items) >= 2:
