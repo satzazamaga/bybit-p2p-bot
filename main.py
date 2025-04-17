@@ -103,7 +103,6 @@ async def check_bybit(context: ContextTypes.DEFAULT_TYPE):
                         "authMaker": False
                     }
 
-> …:
 bank_filter = user_data[uid].get("bank", None)
                     if bank_filter and bank_filter != "All":
                         payload["payment"] = [bank_filter]
