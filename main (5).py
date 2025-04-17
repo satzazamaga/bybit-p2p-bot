@@ -1,100 +1,97 @@
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-import logging
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 TOKEN = "8093706202:AAHRJz_paYKZ0R50TbUhcprxXmJd0VXy_mA"
-
-# Логирование
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-
-# Данные пользователей
 user_data = {}
 
-# /start
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привет! Я бот для отслеживания выгодных P2P-сделок на Bybit.\n"
-        "Напиши /help чтобы узнать, что я умею."
+        "Привет! Я бот для отслеживания выгодных P2P-сделок на Bybit.\n\n"
+        "Вот список команд:\n"
+        "/budget 10000 — установить бюджет\n"
+        "/cancel — отменить бюджет\n"
+        "/bank Kaspi — фильтр по банку (Kaspi, Halyk, БЦК)\n"
+        "/bank all — показать все банки\n"
+        "/status — текущие лучшие предложения\n"
+        "/currency — список отслеживаемых валют\n"
+        "/help — помощь"
     )
 
-# /help
+# Команда /help
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("""
-Доступные команды:
-/start — запуск бота
-/help — список команд
-/budget [сумма] — установить бюджет
-/cancel — сбросить бюджет
-/bank [Kaspi|Halyk|БЦК|all] — выбрать банк
-/status — показать текущие курсы (пример)
-/currency — показать отслеживаемые валюты
-""")
+    await start(update, context)
 
-# /budget
-async def budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if context.args:
-        try:
-            amount = float(context.args[0])
-            user_data.setdefault(user_id, {})["budget"] = amount
-            await update.message.reply_text(f"Бюджет установлен: {amount} тг")
-        except ValueError:
-            await update.message.reply_text("Введите корректную сумму.")
-    else:
+# Команда /budget
+async def set_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        amount = int(context.args[0])
+        user_id = update.effective_user.id
+        user_data[user_id] = user_data.get(user_id, {})
+        user_data[user_id]["budget"] = amount
+        await update.message.reply_text(f"Бюджет установлен: {amount} ₸")
+    except (IndexError, ValueError):
         await update.message.reply_text("Пример: /budget 10000")
 
-# /cancel
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Команда /cancel
+async def cancel_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_data and "budget" in user_data[user_id]:
         del user_data[user_id]["budget"]
-        await update.message.reply_text("Бюджет сброшен.")
+        await update.message.reply_text("Бюджет отменён.")
     else:
-        await update.message.reply_text("Бюджет не был установлен.")
+        await update.message.reply_text("Бюджет ещё не установлен.")
 
-# /bank
-async def bank(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if context.args:
-        bank_name = context.args[0].lower()
-        if bank_name in ['kaspi', 'halyk', 'бцк', 'all']:
-            user_data.setdefault(user_id, {})["bank"] = bank_name
-            await update.message.reply_text(f"Банк выбран: {bank_name.capitalize()}")
+# Команда /bank
+async def set_bank(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        bank = context.args[0].capitalize()
+        user_id = update.effective_user.id
+        user_data[user_id] = user_data.get(user_id, {})
+        if bank == "All":
+            user_data[user_id]["bank"] = "all"
+            await update.message.reply_text("Фильтр по банку отключён.")
+        elif bank in ["Kaspi", "Halyk", "Бцк"]:
+            user_data[user_id]["bank"] = bank
+            await update.message.reply_text(f"Выбран банк: {bank}")
         else:
-            await update.message.reply_text("Доступные банки: Kaspi, Halyk, БЦК, all.")
-    else:
+            await update.message.reply_text("Доступные банки: Kaspi, Halyk, БЦК")
+    except IndexError:
         await update.message.reply_text("Пример: /bank Kaspi")
 
-# /currency
+# Команда /currency
 async def currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Отслеживаемые валюты: USDT")
+    await update.message.reply_text("Отслеживаемые валюты: USDT, BTC, TON. Скоро добавлю больше.")
 
-# /status
+# Команда /status
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Примерные фейковые данные (замени позже на реальные из Bybit API)
+    user_id = update.effective_user.id
+    budget = user_data.get(user_id, {}).get("budget", "не установлен")
+    bank = user_data.get(user_id, {}).get("bank", "все банки")
+
     await update.message.reply_text(
-        "Пример предложения:\n\n"
-        "Банк: Kaspi\n"
-        "Курс: 477.5 тг\n"
-        "Доступно: 1500 USDT\n"
-        "Мин. сумма: 10 000 тг\n"
-        "Время: 12:42"
+        f"Текущий статус:\n"
+        f"Бюджет: {budget}\n"
+        f"Банк: {bank}\n\n"
+        f"(Пока что это тестовые данные. Скоро будет подключён реальный P2P API Bybit)"
     )
 
-# Запуск приложения
-if __name__ == '__main__':
+# Команда по умолчанию
+async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Неизвестная команда. Введите /help для списка доступных.")
+
+# Запуск
+if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("budget", budget))
-    app.add_handler(CommandHandler("cancel", cancel))
-    app.add_handler(CommandHandler("bank", bank))
-    app.add_handler(CommandHandler("currency", currency))
+    app.add_handler(CommandHandler("budget", set_budget))
+    app.add_handler(CommandHandler("cancel", cancel_budget))
+    app.add_handler(CommandHandler("bank", set_bank))
     app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("currency", currency))
+    app.add_handler(MessageHandler(filters.COMMAND, unknown))
 
     print("Бот запущен...")
     app.run_polling()
