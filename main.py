@@ -2,7 +2,10 @@ import asyncio
 import json
 import aiohttp
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler,
+    filters, JobQueue
+)
 from datetime import datetime
 
 TOKEN = "8093706202:AAHRJz_paYKZ0R50TbUhcprxXmJd0VXy_mA"
@@ -11,10 +14,9 @@ user_data = {}
 CURRENCIES = ["USDT", "BTC", "TON", "ETH", "DAI", "TRX", "SOL", "BUSD", "XRP", "SHIB"]
 CHECK_INTERVAL = 300  # 5 минут
 
-# Команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Добро пожаловать! Я отслеживаю выгодные предложения на Bybit P2P.\n\n"
+        "Бот работает!\n\n"
         "Команды:\n"
         "/budget 10000 — установить бюджет\n"
         "/cancel — отменить бюджет\n"
@@ -81,8 +83,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Спред: {u.get('spread', 'от 5% по умолчанию')}"
     )
 
-# Автообновление
-async def check_bybit():
+async def check_bybit(context: ContextTypes.DEFAULT_TYPE):
     url = "https://api2.bybit.com/fiat/otc/item/online"
     async with aiohttp.ClientSession() as session:
         for uid in user_data:
@@ -120,22 +121,26 @@ async def check_bybit():
                                         f"Цена 1: {price1} ₸\n"
                                         f"Цена 2: {price2} ₸\n"
                                         f"Спред: {spread:.2f} ₸ ({spread_percent:.2f}%)\n"
-                                        f"Банк: {bank_filter or 'Все'}\n"
-                                        f"Время: {datetime.now().strftime('%H:%M:%S')}"
+                                        f"Банк: {bank_filter or 'Все'}"
                                     )
-                                    bot = context.bot
-                                    await bot.send_message(chat_id=uid, text=msg)
+
+                                    # расчет по бюджету
+                                    budget = user_data[uid].get("budget", None)
+                                    if budget:
+                                        quantity = round(budget / price1, 4)
+                                        msg += f"\n\nУ тебя бюджет: {budget} ₸\n"
+                                        msg += f"Ты можешь {'купить' if side == 'BUY' else 'продать'}: {quantity} {currency}"
+
+                                    msg += f"\nВремя: {datetime.now().strftime('%H:%M:%S')}"
+                                    await context.bot.send_message(chat_id=uid, text=msg)
                     except Exception as e:
                         print(f"Ошибка при получении данных: {e}")
 
-# Запуск
-async def run_checks(app):
-    while True:
-        await check_bybit()
-        await asyncio.sleep(CHECK_INTERVAL)
+async def init_job_queue(app):
+    app.job_queue.run_repeating(check_bybit, interval=CHECK_INTERVAL, first=5)
 
 if __name__ == "__main__":
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = ApplicationBuilder().token(TOKEN).post_init(init_job_queue).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
@@ -147,6 +152,5 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("status", status))
     app.add_handler(MessageHandler(filters.COMMAND, help_command))
 
-    app.job_queue.run_repeating(lambda ctx: asyncio.create_task(check_bybit()), interval=CHECK_INTERVAL)
     print("Бот запущен с автообновлением...")
     app.run_polling()
