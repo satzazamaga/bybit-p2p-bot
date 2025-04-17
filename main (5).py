@@ -1,114 +1,116 @@
-
 import logging
-import os
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, CallbackContext
 import requests
-from aiogram import Bot, Dispatcher, executor, types
-from datetime import datetime
-import asyncio
 
-# Инициализация бота
-API_TOKEN = os.getenv("BOT_TOKEN")
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
+# Установите свой токен, который ты получил через BotFather
+TOKEN = "8093706202:AAHRJz_paYKZ0R50TbUhcprxXmJd0VXy_mA"
 
-# Настройки пользователя
-user_settings = {
-    "budget": None,
-    "bank": None,
-    "watch_mode": True
-}
+# Включение логирования
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-CURRENCIES = ["USDT", "USDC", "BTC", "ETH", "TRX", "SOL", "XRP", "LTC", "DAI", "TUSD", "FDUSD"]
-BANKS = ["Kaspi", "Halyk", "БЦК"]
+# Инициализация переменных
+user_budget = None
+selected_bank = 'all'
+currency_list = ['USDT', 'BTC']
+p2p_url = 'https://api.bybit.com/p2p/'
 
-# Получение P2P предложений с Bybit
-async def get_p2p_offers():
-    offers = []
-    headers = {"Content-Type": "application/json"}
-    for currency in CURRENCIES:
+# Функция для старта
+def start(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text("Привет! Я помогу тебе найти выгодные предложения на Bybit P2P.\n"
+                              "Используй /help для получения списка команд.")
+
+# Функция для вывода помощи
+def help(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text("""
+Доступные команды:
+• /start — Запустить бота
+• /budget [сумма] — Установить бюджет для сделок
+• /cancel — Отключить бюджетный режим
+• /bank [Название банка] — Фильтрация по банку (например, Kaspi, Halyk)
+• /bank all — Показать все банки
+• /status — Показать текущие лучшие курсы
+• /currency — Список отслеживаемых валют
+""")
+
+# Функция для установки бюджета
+def budget(update: Update, context: CallbackContext) -> None:
+    global user_budget
+    if context.args:
         try:
-            response = requests.post(
-                "https://api2.bybit.com/fiat/otc/item/online",
-                json={
-                    "userId": "",
-                    "tokenId": currency,
-                    "currencyId": "KZT",
-                    "payment": [],
-                    "side": "1",
-                    "size": 10,
-                    "page": 1
-                },
-                headers=headers,
-                timeout=10
-            )
-            data = response.json()
-            for item in data.get("result", {}).get("items", []):
-                price = float(item["price"])
-                bank = item["payments"][0]["paymentName"]
-                if not user_settings["bank"] or bank.lower() == user_settings["bank"].lower():
-                    offers.append((currency, price, bank))
-        except Exception as e:
-            logging.error(f"Ошибка при получении {currency}: {e}")
-    return offers
-
-# Генерация текста с предложениями
-def generate_offer_text(offers):
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    lines = [f"Выгодные предложения на {now}:"]
-    for currency, price, bank in offers:
-        lines.append(f"{currency} - {price} KZT [{bank}]")
-    return "\n".join(lines)
-
-@dp.message_handler(commands=['start'])
-async def start(message: types.Message):
-    await message.answer("Привет! Я бот для мониторинга выгодных предложений на Bybit P2P по тенге.")
-
-@dp.message_handler(commands=['budget'])
-async def set_budget(message: types.Message):
-    try:
-        budget = int(message.get_args())
-        user_settings["budget"] = budget
-        await message.answer(f"Бюджет установлен: {budget} тенге.")
-    except:
-        await message.answer("Укажи бюджет числом, например: /budget 10000")
-
-@dp.message_handler(commands=['cancel'])
-async def cancel_budget(message: types.Message):
-    user_settings["budget"] = None
-    await message.answer("Мониторинг по бюджету отменён.")
-
-@dp.message_handler(commands=['bank'])
-async def set_bank(message: types.Message):
-    arg = message.get_args()
-    if arg.lower() == "all":
-        user_settings["bank"] = None
-        await message.answer("Теперь отображаются предложения по всем банкам.")
-    elif arg.capitalize() in BANKS:
-        user_settings["bank"] = arg
-        await message.answer(f"Теперь показываю предложения только по банку: {arg}")
+            user_budget = float(context.args[0])
+            update.message.reply_text(f"Бюджет установлен: {user_budget} тг")
+        except ValueError:
+            update.message.reply_text("Неверный формат. Введите сумму в тг.")
     else:
-        await message.answer("Банк не найден. Доступные: Kaspi, Halyk, БЦК, all")
+        update.message.reply_text("Пожалуйста, укажите сумму.")
 
-@dp.message_handler(commands=['status'])
-async def status(message: types.Message):
-    offers = await get_p2p_offers()
-    text = generate_offer_text(offers[:5])
-    await message.answer(text)
+# Функция для отмены бюджета
+def cancel(update: Update, context: CallbackContext) -> None:
+    global user_budget
+    user_budget = None
+    update.message.reply_text("Бюджетный режим отключен.")
 
-# Отправка в фоне уведомлений
-async def background_monitor():
-    await bot.wait_until_ready()
-    while True:
-        if user_settings["watch_mode"]:
-            offers = await get_p2p_offers()
-            text = generate_offer_text(offers[:3])
-            try:
-                await bot.send_message(chat_id=os.getenv("USER_ID"), text=text)
-            except Exception as e:
-                logging.error(f"Ошибка отправки уведомления: {e}")
-        await asyncio.sleep(300)  # каждые 5 минут
+# Функция для выбора банка
+def bank(update: Update, context: CallbackContext) -> None:
+    global selected_bank
+    if context.args:
+        bank = context.args[0]
+        if bank.lower() in ['kaspi', 'halyk', 'бцк', 'all']:
+            selected_bank = bank.lower()
+            update.message.reply_text(f"Фильтрация установлена по банку: {selected_bank.capitalize()}")
+        else:
+            update.message.reply_text("Неизвестный банк. Доступные банки: Kaspi, Halyk, БЦК, all.")
+    else:
+        update.message.reply_text("Пожалуйста, укажите банк.")
+
+# Функция для получения текущих курсов
+def status(update: Update, context: CallbackContext) -> None:
+    # Пример запроса к P2P API Bybit, в реальности нужно подставить реальный эндпоинт
+    response = requests.get(f'{p2p_url}/marketplace')
+    data = response.json()
+    
+    # Здесь необходимо фильтровать данные по выбранному банку и курсу
+    if data:
+        offers = data.get('offers', [])
+        message = "Текущие предложения:\n"
+        for offer in offers:
+            if selected_bank == 'all' or offer['bank'] == selected_bank:
+                message += f"Банк: {offer['bank']}, Курс: {offer['rate']} тг/USDT, Сумма: {offer['amount']} USDT\n"
+        update.message.reply_text(message if message else "Нет доступных предложений.")
+    else:
+        update.message.reply_text("Ошибка получения данных с Bybit.")
+
+# Функция для вывода списка валют
+def currency(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text("Отслеживаемые валюты: " + ", ".join(currency_list))
+
+# Функция для обработки ошибок
+def error(update: Update, context: CallbackContext) -> None:
+    logger.warning(f'Update {update} caused error {context.error}')
+
+# Основная функция для запуска бота
+def main():
+    updater = Updater(TOKEN)
+
+    # Регистрация обработчиков команд
+    dispatcher = updater.dispatcher
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CommandHandler("help", help))
+    dispatcher.add_handler(CommandHandler("budget", budget))
+    dispatcher.add_handler(CommandHandler("cancel", cancel))
+    dispatcher.add_handler(CommandHandler("bank", bank))
+    dispatcher.add_handler(CommandHandler("status", status))
+    dispatcher.add_handler(CommandHandler("currency", currency))
+
+    # Логирование ошибок
+    dispatcher.add_error_handler(error)
+
+    # Запуск бота
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.create_task(background_monitor())
-    executor.start_polling(dp, skip_updates=True)
+    main()
