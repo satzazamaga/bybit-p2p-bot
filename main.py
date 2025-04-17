@@ -1,3 +1,4 @@
+> …:
 import asyncio
 import json
 import aiohttp
@@ -25,6 +26,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/spread 1 10 — фильтр по спреду в % (от и до)\n"
         "/currency — отслеживаемые валюты\n"
         "/status — текущие параметры\n"
+        "/check — сразу проверить выгодные сделки\n"
         "/help — список команд"
     )
 
@@ -101,7 +103,9 @@ async def check_bybit(context: ContextTypes.DEFAULT_TYPE):
                         "amount": "",
                         "authMaker": False
                     }
-                    bank_filter = user_data[uid].get("bank", None)
+
+> …:
+bank_filter = user_data[uid].get("bank", None)
                     if bank_filter and bank_filter != "All":
                         payload["payment"] = [bank_filter]
                     try:
@@ -136,10 +140,17 @@ async def check_bybit(context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         print(f"Ошибка при получении данных: {e}")
 
+async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    class DummyContext:
+        bot = context.bot
+
+    await check_bybit(DummyContext())
+    await update.message.reply_text("Проверка завершена.")
+
 async def init_job_queue(app):
     app.job_queue.run_repeating(check_bybit, interval=CHECK_INTERVAL, first=5)
 
-if __name__ == "__main__":
+if name == "__main__":
     app = ApplicationBuilder().token(TOKEN).post_init(init_job_queue).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -150,6 +161,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("spread", set_spread))
     app.add_handler(CommandHandler("currency", currency))
     app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("check", check_now))
     app.add_handler(MessageHandler(filters.COMMAND, help_command))
 
     print("Бот запущен с автообновлением...")
