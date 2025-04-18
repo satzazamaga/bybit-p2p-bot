@@ -1,170 +1,171 @@
-# main.py
-
-import asyncio
 import logging
-from aiohttp import ClientSession
-from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
-from telegram.ext import Defaults
+import asyncio
+import requests
+from aiogram import Bot, Dispatcher, executor, types
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from datetime import datetime
 
-TOKEN = "8093706202:AAHRJz_paYKZ0R50TbUhcprxXmJd0VXy_mA"
-CHECK_INTERVAL = 300  # каждые 5 минут
+API_TOKEN = 'ТОКЕН_ТВОЕГО_БОТА'  # Замени на свой токен
+OWNER_ID = 5791850798  # Твой Telegram ID
 
-user_data = {}
-tracked_currencies = ["USDT", "BTC", "TON", "ETH", "BNB", "SOL", "TRX", "DOGE", "SHIB", "DAI"]
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Меню кнопок
+menu = ReplyKeyboardMarkup(resize_keyboard=True)
+menu.add(KeyboardButton('/start_check'), KeyboardButton('/stop_check'))
+menu.add(KeyboardButton('/status'), KeyboardButton('/history'))
+menu.add(KeyboardButton('/reset'), KeyboardButton('/help'))
 
-async def fetch_offers(session, currency, side, uid):
-    url = f"https://api2.bybit.com/fiat/otc/item/online"
-    payload = {
-        "userId": "",
-        "tokenId": currency,
-        "currencyId": "KZT",
-        "payment": [],
-        "side": side,
-        "size": "",
-        "page": 1,
-        "amount": "",
-        "authMaker": False,
-        "rows": 10
-    }
+# Настройки
+filter_spread = 5
+currencies = ['USDT', 'BTC', 'TON']
+banks = []  # Например: ['KASPI_BANK', 'HALYK_BANK']
+check_interval = 5  # минут
+history_log = []
+is_checking = False
 
-    bank_filter = user_data[uid].get("bank", None)
-    if bank_filter and bank_filter != "All":
-        payload["payment"] = [bank_filter]
+# Команды
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    await message.answer("Бот запущен. Ниже меню для управления:", reply_markup=menu)
 
-    try:
-        async with session.post(url, json=payload) as resp:
-            data = await resp.json()
-            return data.get("result", {}).get("items", [])
-    except Exception as e:
-        logger.error(f"Ошибка при получении офферов: {e}")
-        return []
+@dp.message_handler(commands=['help'])
+async def help_cmd(message: types.Message):
+    await message.answer("""
+Доступные команды:
+/start — запустить бота
+/status — текущие настройки
+/set_filter [число] — установить минимальный спред
+/currencies [валюты] — изменить список валют
+/banks [список банков] — изменить список банков
+/interval [минуты] — изменить интервал проверки
+/start_check — запустить проверку вручную
+/stop_check — остановить проверку
+/history — последние уведомления
+/reset — сбросить все фильтры
+/help — показать это сообщение
+""", reply_markup=menu)
 
-def calculate_spread(buy_price, sell_price):
-    try:
-        return round((sell_price - buy_price) / buy_price * 100, 2)
-    except ZeroDivisionError:
-        return 0
-
-def check_spread_valid(spread, uid):
-    user_spread = user_data[uid].get("spread", (5.0, 100.0))
-    return user_spread[0] <= spread <= user_spread[1]
-
-async def check_bybit_all_users(app):
-    async with ClientSession() as session:
-        for uid in user_data:
-            message_lines = []
-            for currency in tracked_currencies:
-                buy_offers = await fetch_offers(session, currency, "Buy", uid)
-                sell_offers = await fetch_offers(session, currency, "Sell", uid)
-
-                if buy_offers and sell_offers:
-                    best_buy = float(buy_offers[0]['adv']['price'])
-                    best_sell = float(sell_offers[0]['adv']['price'])
-                    spread = calculate_spread(best_buy, best_sell)
-
-                    if check_spread_valid(spread, uid):
-                        message_lines.append(
-                            f"{currency}: Спред {spread}%\n"
-                            f"Покупка: {best_buy} ₸\nПродажа: {best_sell} ₸\n"
-                            f"{'-'*30}"
-                        )
-
-            if message_lines:
-                await app.bot.send_message(chat_id=uid, text="\n".join(message_lines))
-            else:
-                await app.bot.send_message(chat_id=uid, text="Нет подходящих предложений")
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_chat.id
-    user_data[uid] = {"spread": (5.0, 100.0)}
-    await update.message.reply_text("Бот запущен. Используй /help для списка команд.")
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "/start – Запуск бота\n"
-        "/check – Проверка вручную\n"
-        "/budget [сумма] – Установить бюджет\n"
-        "/cancel – Отменить бюджет\n"
-        "/bank [Kaspi|Halyk|БЦК|All] – Фильтр по банку\n"
-        "/status – Показать текущие настройки\n"
-        "/spread [от] [до] – Задать спред в %\n"
+@dp.message_handler(commands=['status'])
+async def status(message: types.Message):
+    await message.answer(
+        f"Валюты: {', '.join(currencies)}\nМинимальный спред: {filter_spread}₸\n"
+        f"Банки: {'все' if not banks else ', '.join(banks)}\nИнтервал: {check_interval} мин\nМониторинг: {'ВКЛ' if is_checking else 'ВЫКЛ'}"
     )
 
-async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_chat.id
-    await update.message.reply_text("Проверка предложений...")
-    await check_bybit_all_users(context.application)
-
-async def budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_chat.id
+@dp.message_handler(commands=['set_filter'])
+async def set_filter(message: types.Message):
+    global filter_spread
     try:
-        amount = float(context.args[0])
-        user_data.setdefault(uid, {})["budget"] = amount
-        await update.message.reply_text(f"Бюджет установлен: {amount} ₸")
+        value = int(message.get_args())
+        filter_spread = value
+        await message.answer(f"Минимальный спред установлен: {filter_spread}₸")
     except:
-        await update.message.reply_text("Используй: /budget 10000")
+        await message.answer("Введите число: /set_filter 5")
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_chat.id
-    user_data.get(uid, {}).pop("budget", None)
-    await update.message.reply_text("Бюджет отменён.")
+@dp.message_handler(commands=['currencies'])
+async def set_currencies(message: types.Message):
+    global currencies
+    args = message.get_args().split()
+    if args:
+        currencies = args
+        await message.answer(f"Отслеживаемые валюты: {', '.join(currencies)}")
+    else:
+        await message.answer("Пример: /currencies USDT BTC")
 
-async def bank(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_chat.id
-    if not context.args:
-        await update.message.reply_text("Укажи банк: /bank Kaspi, /bank Halyk, /bank БЦК, /bank All")
-        return
-    bank = context.args[0]
-    user_data.setdefault(uid, {})["bank"] = bank
-    await update.message.reply_text(f"Фильтр по банку: {bank}")
+@dp.message_handler(commands=['banks'])
+async def set_banks(message: types.Message):
+    global banks
+    args = message.get_args().split()
+    banks = args
+    await message.answer(f"Банки обновлены: {'все' if not banks else ', '.join(banks)}")
 
-async def spread(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_chat.id
+@dp.message_handler(commands=['interval'])
+async def set_interval(message: types.Message):
+    global check_interval
     try:
-        from_val = float(context.args[0])
-        to_val = float(context.args[1])
-        user_data.setdefault(uid, {})["spread"] = (from_val, to_val)
-        await update.message.reply_text(f"Спред фильтр установлен: от {from_val}% до {to_val}%")
+        value = int(message.get_args())
+        check_interval = value
+        await message.answer(f"Интервал обновлён: каждые {check_interval} минут")
     except:
-        await update.message.reply_text("Используй: /spread 1.0 10.0")
+        await message.answer("Пример: /interval 10")
 
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_chat.id
-    data = user_data.get(uid, {})
-    budget = data.get("budget", "Не установлен")
-    bank = data.get("bank", "All")
-    spread = data.get("spread", (5.0, 100.0))
-    await update.message.reply_text(
-        f"Текущий статус:\n"
-        f"Бюджет: {budget} ₸\n"
-        f"Банк: {bank}\n"
-        f"Спред: от {spread[0]}% до {spread[1]}%"
-    )
+@dp.message_handler(commands=['reset'])
+async def reset_filters(message: types.Message):
+    global filter_spread, currencies, banks
+    filter_spread = 5
+    currencies = ['USDT', 'BTC', 'TON']
+    banks = []
+    await message.answer("Настройки сброшены по умолчанию.")
 
-if __name__ == "__main__":
-    app = ApplicationBuilder().token(TOKEN).defaults(Defaults(parse_mode="HTML")).build()
+@dp.message_handler(commands=['history'])
+async def history(message: types.Message):
+    if history_log:
+        await message.answer("\n\n".join(history_log[-5:]))
+    else:
+        await message.answer("История пуста.")
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("check", check))
-    app.add_handler(CommandHandler("budget", budget))
-    app.add_handler(CommandHandler("cancel", cancel))
-    app.add_handler(CommandHandler("bank", bank))
-    app.add_handler(CommandHandler("spread", spread))
-    app.add_handler(CommandHandler("status", status))
+@dp.message_handler(commands=['start_check'])
+async def start_check(message: types.Message):
+    global is_checking
+    if not is_checking:
+        is_checking = True
+        await message.answer("Мониторинг включен.")
+        asyncio.create_task(check_market())
+    else:
+        await message.answer("Мониторинг уже работает.")
 
-    job_queue = app.job_queue
-    job_queue.run_repeating(lambda ctx: asyncio.create_task(check_bybit_all_users(app)), interval=CHECK_INTERVAL)
+@dp.message_handler(commands=['stop_check'])
+async def stop_check(message: types.Message):
+    global is_checking
+    is_checking = False
+    await message.answer("Мониторинг остановлен.")
 
-    app.run_polling()
+# Реальный мониторинг Bybit P2P
+async def check_market():
+    global history_log
+    while is_checking:
+        now = datetime.now().strftime("%H:%M:%S")
+        for currency in currencies:
+            try:
+                params = {
+                    "userId": "",
+                    "tokenId": currency,
+                    "currencyId": "KZT",
+                    "payment": banks,
+                    "side": "1",
+                    "size": "",
+                    "page": 1,
+                    "amount": "",
+                    "authMaker": False,
+                    "canTrade": False
+                }
+                buy_response = requests.post("https://api2.bybit.com/fiat/otc/item/online", json=params, timeout=10).json()
+
+                params["side"] = "0"
+                sell_response = requests.post("https://api2.bybit.com/fiat/otc/item/online", json=params, timeout=10).json()
+
+                buy_price = float(buy_response['result']['items'][0]['price'])
+                sell_price = float(sell_response['result']['items'][0]['price'])
+                spread = sell_price - buy_price
+
+                if spread >= filter_spread:
+                    msg = (
+                        f"[{now}] {currency}\n"
+                        f"🔹 Купить за {buy_price:.2f}₸\n"
+                        f"🔸 Продать за {sell_price:.2f}₸\n"
+                        f"📊 Спред: {spread:.2f}₸"
+                    )
+                    history_log.append(msg)
+                    await bot.send_message(OWNER_ID, msg)
+
+            except Exception as e:
+                await bot.send_message(OWNER_ID, f"[{now}] Ошибка по {currency}: {e}")
+
+        await asyncio.sleep(check_interval * 60)
+
+# Запуск
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+    executor.start_polling(dp, skip_updates=True)
