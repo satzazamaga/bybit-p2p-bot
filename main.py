@@ -109,19 +109,23 @@ async def check_market():
         results = []
         now = datetime.now().strftime("%H:%M:%S")
         for currency in currencies:
-            # Получение данных с Bybit P2P (реальный запрос)
-            url = f'https://api.bybit.com/v2/public/orderbook/L2?symbol={currency}USDT'
-            response = requests.get(url)
-            data = response.json()
+            try:
+                # Получение данных с Bybit P2P (реальный запрос)
+                url = f'https://api.bybit.com/v2/public/orderbook/L2?symbol={currency}USDT'
+                response = requests.get(url)
+                data = response.json()
 
-            if data['ret_code'] == 0:
-                buy_price = float(data['result'][0]['price'])
-                sell_price = float(data['result'][1]['price'])
-                spread = sell_price - buy_price
+                if data['ret_code'] == 0:
+                    buy_price = float(data['result'][0]['price'])
+                    sell_price = float(data['result'][1]['price'])
+                    spread = sell_price - buy_price
 
-                if spread >= filter_spread:
-                    result = f"[{now}] {currency}: Купить за {buy_price}₸ / Продать за {sell_price}₸ — Спред: {spread}₸"
-                    results.append(result)
+                    if spread >= filter_spread:
+                        result = f"[{now}] {currency}: Купить за {buy_price}₸ / Продать за {sell_price}₸ — Спред: {spread}₸"
+                        results.append(result)
+
+            except Exception as e:
+                logging.error(f"Ошибка при запросе данных: {e}")
 
         if results:
             for r in results:
