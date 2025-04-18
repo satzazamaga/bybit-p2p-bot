@@ -5,47 +5,42 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from datetime import datetime
 
-API_TOKEN = 'ТОКЕН_ТВОЕГО_БОТА'  # Замени на свой токен
-OWNER_ID = 5791850798  # Твой Telegram ID
+API_TOKEN = '8093706202:AAHRJz_paYKZ0R50TbUhcprxXmJd0VXy_mA'  # Вставь свой токен
+OWNER_ID = 5791850798  # твой Telegram ID
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# Меню кнопок
+# Настройки
+filter_spread = 5
+currencies = ['USDT', 'BTC', 'TON']
+banks = []
+check_interval = 5  # в минутах
+history_log = []
+is_checking = False
+
+# Клавиатура с кнопками для команд
 menu = ReplyKeyboardMarkup(resize_keyboard=True)
 menu.add(KeyboardButton('/start_check'), KeyboardButton('/stop_check'))
 menu.add(KeyboardButton('/status'), KeyboardButton('/history'))
 menu.add(KeyboardButton('/reset'), KeyboardButton('/help'))
 
-# Настройки
-filter_spread = 5
-currencies = ['USDT', 'BTC', 'TON']
-banks = []  # Например: ['KASPI_BANK', 'HALYK_BANK']
-check_interval = 5  # минут
-history_log = []
-is_checking = False
+# ========== Команды ==========
 
-# Команды
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
     await message.answer("Бот запущен. Ниже меню для управления:", reply_markup=menu)
 
 @dp.message_handler(commands=['help'])
 async def help_cmd(message: types.Message):
-    await message.answer("""
-Доступные команды:
-/start — запустить бота
+    await message.answer("""Меню команд:
+/start_check — начать мониторинг
+/stop_check — остановить
 /status — текущие настройки
-/set_filter [число] — установить минимальный спред
-/currencies [валюты] — изменить список валют
-/banks [список банков] — изменить список банков
-/interval [минуты] — изменить интервал проверки
-/start_check — запустить проверку вручную
-/stop_check — остановить проверку
-/history — последние уведомления
-/reset — сбросить все фильтры
-/help — показать это сообщение
-""", reply_markup=menu)
+/history — последние сделки
+/reset — сброс настроек
+/help — помощь
+    """, reply_markup=menu)
 
 @dp.message_handler(commands=['status'])
 async def status(message: types.Message):
@@ -106,6 +101,35 @@ async def history(message: types.Message):
     else:
         await message.answer("История пуста.")
 
+# ========== Проверка предложений (реальный запрос) ==========
+
+async def check_market():
+    global history_log
+    while is_checking:
+        results = []
+        now = datetime.now().strftime("%H:%M:%S")
+        for currency in currencies:
+            # Получение данных с Bybit P2P (реальный запрос)
+            url = f'https://api.bybit.com/v2/public/orderbook/L2?symbol={currency}USDT'
+            response = requests.get(url)
+            data = response.json()
+
+            if data['ret_code'] == 0:
+                buy_price = float(data['result'][0]['price'])
+                sell_price = float(data['result'][1]['price'])
+                spread = sell_price - buy_price
+
+                if spread >= filter_spread:
+                    result = f"[{now}] {currency}: Купить за {buy_price}₸ / Продать за {sell_price}₸ — Спред: {spread}₸"
+                    results.append(result)
+
+        if results:
+            for r in results:
+                history_log.append(r)
+                await bot.send_message(OWNER_ID, r)
+
+        await asyncio.sleep(check_interval * 60)
+
 @dp.message_handler(commands=['start_check'])
 async def start_check(message: types.Message):
     global is_checking
@@ -122,50 +146,8 @@ async def stop_check(message: types.Message):
     is_checking = False
     await message.answer("Мониторинг остановлен.")
 
-# Реальный мониторинг Bybit P2P
-async def check_market():
-    global history_log
-    while is_checking:
-        now = datetime.now().strftime("%H:%M:%S")
-        for currency in currencies:
-            try:
-                params = {
-                    "userId": "",
-                    "tokenId": currency,
-                    "currencyId": "KZT",
-                    "payment": banks,
-                    "side": "1",
-                    "size": "",
-                    "page": 1,
-                    "amount": "",
-                    "authMaker": False,
-                    "canTrade": False
-                }
-                buy_response = requests.post("https://api2.bybit.com/fiat/otc/item/online", json=params, timeout=10).json()
+# ========== Запуск ==========
 
-                params["side"] = "0"
-                sell_response = requests.post("https://api2.bybit.com/fiat/otc/item/online", json=params, timeout=10).json()
-
-                buy_price = float(buy_response['result']['items'][0]['price'])
-                sell_price = float(sell_response['result']['items'][0]['price'])
-                spread = sell_price - buy_price
-
-                if spread >= filter_spread:
-                    msg = (
-                        f"[{now}] {currency}\n"
-                        f"🔹 Купить за {buy_price:.2f}₸\n"
-                        f"🔸 Продать за {sell_price:.2f}₸\n"
-                        f"📊 Спред: {spread:.2f}₸"
-                    )
-                    history_log.append(msg)
-                    await bot.send_message(OWNER_ID, msg)
-
-            except Exception as e:
-                await bot.send_message(OWNER_ID, f"[{now}] Ошибка по {currency}: {e}")
-
-        await asyncio.sleep(check_interval * 60)
-
-# Запуск
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     executor.start_polling(dp, skip_updates=True)
