@@ -5,9 +5,10 @@ import requests
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from datetime import datetime
+from dotenv import load_dotenv  # Импорт для работы с .env файлами
 
-import os
-from aiogram import Bot, Dispatcher
+# Загрузка переменных окружения из .env файла
+load_dotenv()
 
 # 🔐 Токен и настройки
 API_TOKEN = os.getenv('API_TOKEN')  # Загрузка токена из переменной окружения
@@ -27,14 +28,15 @@ banks = []
 check_interval = 5  # минут
 history_log = []
 is_checking = False
+
 # 🔹 Меню кнопок
 menu = ReplyKeyboardMarkup(resize_keyboard=True)
 menu.add(
-    KeyboardButton('📅 Статус'), 
+    KeyboardButton('📅 Статус'),
     KeyboardButton('📈 Запустить мониторинг'),
-    KeyboardButton('⏹️ Остановить мониторинг'), 
+    KeyboardButton('⏹️ Остановить мониторинг'),
     KeyboardButton('📃 История'),
-    KeyboardButton('⚖️ Установить фильтр'), 
+    KeyboardButton('⚖️ Установить фильтр'),
     KeyboardButton('💱 Изменить валюту'),
     KeyboardButton('🏛️ Изменить банки'),
     KeyboardButton('⏲️ Изменить интервал'),
