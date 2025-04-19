@@ -7,7 +7,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from datetime import datetime
 
 # 🔐 Токен и настройки
-API_TOKEN = os.getenv('API_TOKEN')  # Загрузка токена из переменной окружения
+API_TOKEN = os.getenv('8093706202:AAHRJz_paYKZ0R50TbUhcprxXmJd0VXy_mA')  # Загрузка токена из переменной окружения
 OWNER_ID = 5791850798
 
 bot = Bot(token=API_TOKEN)
