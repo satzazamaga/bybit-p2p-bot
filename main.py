@@ -6,9 +6,15 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from datetime import datetime
 
+import os
+from aiogram import Bot, Dispatcher
+
 # 🔐 Токен и настройки
-API_TOKEN = os.getenv('8093706202:AAHRJz_paYKZ0R50TbUhcprxXmJd0VXy_mA')  # Загрузка токена из переменной окружения
+API_TOKEN = os.getenv('API_TOKEN')  # Загрузка токена из переменной окружения
 OWNER_ID = 5791850798
+
+if API_TOKEN is None:
+    raise ValueError("API_TOKEN is not set. Please set the API_TOKEN environment variable.")
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
@@ -21,7 +27,6 @@ banks = []
 check_interval = 5  # минут
 history_log = []
 is_checking = False
-
 # 🔹 Меню кнопок
 menu = ReplyKeyboardMarkup(resize_keyboard=True)
 menu.add(
