@@ -55,14 +55,15 @@ async def help_cmd(message: types.Message):
 
 @dp.message_handler(commands=['status'])
 async def status(message: types.Message):
-    await message.answer(
-        f"📊 Статус:
-Валюты: {', '.join(currencies)}
-Спред: {filter_spread}₸
-Банки: {'все' if not banks else ', '.join(banks)}
-Интервал: {check_interval} мин
-Мониторинг: {'🟢 ВКЛ' if is_checking else '🔴 ВЫКЛ'}"
+    status_text = (
+        f"📊 <b>Статус</b>\n\n"
+        f"💱 <b>Валюты:</b> {', '.join(currencies)}\n"
+        f"📈 <b>Минимальный спред:</b> {filter_spread}₸\n"
+        f"🏦 <b>Банки:</b> {'все' if not banks else ', '.join(banks)}\n"
+        f"⏱️ <b>Интервал проверки:</b> {check_interval} мин\n"
+        f"🟢 <b>Мониторинг:</b> {'ВКЛ' if is_checking else 'ВЫКЛ'}"
     )
+    await message.answer(status_text, parse_mode="HTML")
 
 @dp.message_handler(commands=['set_filter'])
 async def set_filter(message: types.Message):
