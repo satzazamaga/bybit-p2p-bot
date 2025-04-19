@@ -6,7 +6,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from datetime import datetime
 
 # 🔐 Токен и настройки
-API_TOKEN = 'YOUR_API_TOKEN'
+API_TOKEN = '8093706202:AAHRJz_paYKZ0R50TbUhcprxXmJd0VXy_mA'
 OWNER_ID = 5791850798
 
 bot = Bot(token=API_TOKEN)
