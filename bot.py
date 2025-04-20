@@ -1,30 +1,32 @@
 import os
-import logging
+import asyncio
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     ContextTypes,
     MessageHandler,
-    filters,
-    CallbackQueryHandler
+    filters
 )
 
-# Конфигурация
 TELEGRAM_BOT_TOKEN = os.environ.get('BOT_TOKEN')
 AUTHORIZED_USERS = [6037372226]  # Ваш ID
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🤖 Бот запущен!")
+    await update.message.reply_text("🤖 Бот запущен и работает!")
 
-async def run_bot():
+def run_bot():
     try:
         application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
         
+        # Регистрация команд
         application.add_handler(CommandHandler("start", start))
         # Добавьте другие обработчики здесь
         
-        await application.run_polling()
+        # Создаем новый event loop для этого процесса
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        loop.run_until_complete(application.run_polling())
     except Exception as e:
-        logging.critical(f"Ошибка бота: {e}")
-        raise
+        print(f"Ошибка бота: {e}")
