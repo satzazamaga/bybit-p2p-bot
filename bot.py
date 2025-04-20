@@ -1,3 +1,7 @@
+import os
+TELEGRAM_BOT_TOKEN = os.environ.get('BOT_TOKEN')
+if not TELEGRAM_BOT_TOKEN:
+    raise RuntimeError("Токен не найден!")
 import logging
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext, Filters, MessageHandler
