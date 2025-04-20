@@ -1,12 +1,13 @@
 import os
 import logging
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update
 from telegram.ext import (
-    Updater,
+    ApplicationBuilder,
     CommandHandler,
-    CallbackContext,
-    Filters,
-    MessageHandler
+    ContextTypes,
+    MessageHandler,
+    filters,
+    CallbackContext
 )
 
 # ====== НАСТРОЙКИ ====== #
@@ -27,14 +28,14 @@ DEFAULT_SETTINGS = {
     'history': []
 }
 
-# Глобальное хранилище (в продакшене замените на базу данных)
+# Глобальное хранилище
 user_data = {}
 
 # ====== КОМАНДЫ ====== #
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in AUTHORIZED_USERS:
-        update.message.reply_text("🚫 Доступ запрещён. Купите подписку: @mmaskop")
+        await update.message.reply_text("🚫 Доступ запрещён. Купите подписку: @mmaskop")
         return
 
     user_data[user.id] = DEFAULT_SETTINGS.copy()
@@ -48,7 +49,7 @@ def start(update: Update, context: CallbackContext):
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
-    update.message.reply_text(
+    await update.message.reply_text(
         "🤖 *P2P Monitor Bybit*\n\n"
         "Я отслеживаю лучшие P2P-предложения в реальном времени!\n"
         "Используйте меню ниже для управления.",
@@ -59,15 +60,13 @@ def start(update: Update, context: CallbackContext):
 # ... (добавьте другие команды по аналогии)
 
 def main():
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
-
+    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    
     # Регистрация команд
-    dp.add_handler(CommandHandler("start", start))
-    # ... (добавьте остальные обработчики)
+    application.add_handler(CommandHandler("start", start))
+    # ... (добавьте другие обработчики)
 
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
