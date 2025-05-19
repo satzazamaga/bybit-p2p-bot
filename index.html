@@ -39,6 +39,29 @@
       font-size: 18px;
       color: #636e72;
     }
+    .form-section {
+      margin-top: 30px;
+      padding: 20px;
+      background: #fff8e1;
+      border-radius: 15px;
+      display: inline-block;
+    }
+    input, select, button {
+      font-family: 'Comic Neue', cursive;
+      font-size: 16px;
+      margin: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background-color: #55efc4;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #00cec9;
+      color: white;
+    }
   </style>
 </head>
 <body>
@@ -55,6 +78,25 @@
       <li>— Шоу мыльных пузырей</li>
       <li>— Подарки каждому ребёнку!</li>
     </ul>
+
+    <div class="form-section">
+      <h3>Подтвердите участие:</h3>
+      <form onsubmit="event.preventDefault(); alert('Спасибо за ответ!');">
+        <label for="email">Введите ваш email:</label><br>
+        <input type="email" id="email" name="email" required placeholder="you@example.com"><br>
+
+        <label for="attendance">Вы придёте на праздник?</label><br>
+        <select id="attendance" name="attendance" required>
+          <option value="">-- Выберите вариант --</option>
+          <option value="yes">Да, обязательно!</option>
+          <option value="maybe">Возможно</option>
+          <option value="no">К сожалению, нет</option>
+        </select><br>
+
+        <button type="submit">Отправить</button>
+      </form>
+    </div>
+
     <div class="footer">Ждём вас всей семьёй!</div>
   </div>
 </body>
