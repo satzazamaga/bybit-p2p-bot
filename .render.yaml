@@ -1,13 +1,1 @@
-services:
-  - type: web
-    name: bybit-p2p-bot
-    env: python
-    plan: free
-    region: frankfurt
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
-    envVars:
-      - key: BOT_TOKEN
-        value: ваш_токен_бота
-      - key: PYTHON_VERSION
-        value: 3.9.7
+
